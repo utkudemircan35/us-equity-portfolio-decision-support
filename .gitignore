@@ -1,0 +1,54 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test and coverage files
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Editor settings
+.vscode/
+.idea/
+
+# macOS files
+.DS_Store
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Personal portfolio database
+portfolio.db
+portfolio.db-shm
+portfolio.db-wal
+*.sqlite
+*.sqlite3
+
+# Personal portfolio workbooks
+portfolio.xlsx
+*.xlsx
+!portfolio_template.xlsx
+
+# Brokerage statements and private exports
+midas_ekstreleri/
+brokerage_statements/
+statements/
+exports/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+~$*
+
+# Logs
+*.log
