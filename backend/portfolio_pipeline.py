@@ -5,13 +5,19 @@ from time import perf_counter
 from typing import Any, Callable
 
 from asset_metadata import refresh_asset_metadata
-from database import DATABASE_PATH
+from database import (
+    DATABASE_PATH,
+    PROJECT_DIR,
+)
 from database_setup import create_database
 from excel_importer import (
     DEFAULT_EXCEL_PATH,
     import_excel_to_database,
 )
 from market_data import refresh_market_data
+from midas_pipeline_cli import (
+    run_midas_pipeline,
+)
 from portfolio_calculator import refresh_holdings_summary
 from portfolio_daily_calculator import (
     refresh_portfolio_daily,
@@ -22,6 +28,16 @@ from security_daily_calculator import (
 
 from portfolio_validation_service import (
     run_portfolio_validation,
+)
+
+
+DEFAULT_MIDAS_FOLDER = (
+    PROJECT_DIR / "midas_ekstreleri"
+)
+
+DEFAULT_MIDAS_OUTPUT = (
+    PROJECT_DIR
+    / "midas_portfolio_generated.xlsx"
 )
 
 
@@ -376,6 +392,110 @@ def run_portfolio_pipeline(
     )
 
 
+def run_selected_portfolio_source(
+    source: str,
+    excel_path: Path | None = None,
+    midas_folder: Path = DEFAULT_MIDAS_FOLDER,
+    midas_output: Path = DEFAULT_MIDAS_OUTPUT,
+    sec_contact_email: str | None = None,
+    approve_all: bool = False,
+    reject_all: bool = False,
+    overwrite_midas_output: bool = False,
+    replace_existing: bool = False,
+    progress_callback: ProgressCallback | None = (
+        console_progress_callback
+    ),
+) -> PortfolioPipelineResult:
+    """
+    Build the portfolio from either an Excel workbook
+    or Midas statement PDFs.
+    """
+
+    normalized_source = (
+        str(source)
+        .strip()
+        .casefold()
+    )
+
+    if normalized_source not in {
+        "excel",
+        "midas",
+    }:
+        raise ValueError(
+            "Source must be either 'excel' "
+            "or 'midas'."
+        )
+
+    if normalized_source == "excel":
+        selected_excel_path = (
+            DEFAULT_EXCEL_PATH
+            if excel_path is None
+            else Path(excel_path)
+        )
+
+        print()
+        print("Selected source: Excel")
+        print(
+            "Excel file: "
+            f"{selected_excel_path}"
+        )
+
+    else:
+        if excel_path is not None:
+            raise ValueError(
+                "Do not provide an Excel path when "
+                "the selected source is Midas."
+            )
+
+        selected_midas_folder = (
+            Path(midas_folder)
+            .expanduser()
+            .resolve()
+        )
+
+        selected_midas_output = (
+            Path(midas_output)
+            .expanduser()
+            .resolve()
+        )
+
+        print()
+        print("Selected source: Midas statements")
+        print(
+            "Midas folder: "
+            f"{selected_midas_folder}"
+        )
+
+        run_midas_pipeline(
+            folder=selected_midas_folder,
+            output=selected_midas_output,
+            sec_contact_email=(
+                sec_contact_email
+            ),
+            approve_all=approve_all,
+            reject_all=reject_all,
+            overwrite=(
+                overwrite_midas_output
+            ),
+        )
+
+        selected_excel_path = (
+            selected_midas_output
+        )
+
+        print()
+        print(
+            "Midas statements were converted "
+            "to Excel successfully."
+        )
+
+    return run_portfolio_pipeline(
+        excel_path=selected_excel_path,
+        replace_existing=replace_existing,
+        progress_callback=progress_callback,
+    )
+
+
 def build_argument_parser() -> ArgumentParser:
     """
     Build command-line arguments.
@@ -383,8 +503,8 @@ def build_argument_parser() -> ArgumentParser:
 
     parser = ArgumentParser(
         description=(
-            "Import an Excel portfolio and rebuild "
-            "all core portfolio data."
+            "Build the portfolio from either an "
+            "Excel workbook or Midas statements."
         )
     )
 
@@ -392,15 +512,94 @@ def build_argument_parser() -> ArgumentParser:
         "excel_path",
         nargs="?",
         type=Path,
-        default=DEFAULT_EXCEL_PATH,
+        default=None,
+        help=(
+            "Portfolio Excel file. Used only when "
+            "--source excel is selected. "
+            "Default: portfolio.xlsx"
+        ),
+    )
+
+    parser.add_argument(
+        "--source",
+        choices=[
+            "excel",
+            "midas",
+        ],
+        default="excel",
+        help=(
+            "Portfolio input type. "
+            "Default: excel"
+        ),
+    )
+
+    parser.add_argument(
+        "--midas-folder",
+        type=Path,
+        default=DEFAULT_MIDAS_FOLDER,
+        help=(
+            "Folder containing Midas PDF statements. "
+            "Default: midas_ekstreleri"
+        ),
+    )
+
+    parser.add_argument(
+        "--midas-output",
+        type=Path,
+        default=DEFAULT_MIDAS_OUTPUT,
+        help=(
+            "Excel file generated from Midas PDFs. "
+            "Default: midas_portfolio_generated.xlsx"
+        ),
+    )
+
+    parser.add_argument(
+        "--sec-contact-email",
+        help=(
+            "Contact email used only for SEC "
+            "fair-access identification. If omitted, "
+            "the terminal asks for it."
+        ),
+    )
+
+    decision_group = (
+        parser.add_mutually_exclusive_group()
+    )
+
+    decision_group.add_argument(
+        "--approve-all",
+        action="store_true",
+        help=(
+            "Approve every proposed Midas "
+            "corporate action."
+        ),
+    )
+
+    decision_group.add_argument(
+        "--reject-all",
+        action="store_true",
+        help=(
+            "Reject every proposed Midas "
+            "corporate action."
+        ),
+    )
+
+    parser.add_argument(
+        "--overwrite-midas-output",
+        action="store_true",
+        help=(
+            "Allow replacement of an existing "
+            "generated Midas Excel file."
+        ),
     )
 
     parser.add_argument(
         "--replace-existing",
         action="store_true",
         help=(
-            "Replace existing portfolio data with "
-            "the complete Excel history."
+            "Replace existing portfolio data. "
+            "Use only when the selected source "
+            "contains the complete portfolio history."
         ),
     )
 
@@ -409,7 +608,7 @@ def build_argument_parser() -> ArgumentParser:
 
 def main() -> None:
     """
-    Run the complete portfolio pipeline.
+    Run the complete portfolio workflow.
     """
 
     arguments = (
@@ -417,8 +616,19 @@ def main() -> None:
         .parse_args()
     )
 
-    result = run_portfolio_pipeline(
+    result = run_selected_portfolio_source(
+        source=arguments.source,
         excel_path=arguments.excel_path,
+        midas_folder=arguments.midas_folder,
+        midas_output=arguments.midas_output,
+        sec_contact_email=(
+            arguments.sec_contact_email
+        ),
+        approve_all=arguments.approve_all,
+        reject_all=arguments.reject_all,
+        overwrite_midas_output=(
+            arguments.overwrite_midas_output
+        ),
         replace_existing=(
             arguments.replace_existing
         ),

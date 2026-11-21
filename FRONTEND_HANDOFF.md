@@ -9,10 +9,9 @@ The human collaborators may not know the backend internals. The AI agent must in
 Repository:
 
 - Remote: `https://github.com/utkudemircan35/us-equity-portfolio-decision-support.git`
-- Stable backend tag: `backend-v1.0`
-- Stable backend commit at handoff: `f114e27`
+- Earlier Excel-only backend tag: `backend-v1.0`
 - Default branch: `main`
-- Backend test baseline: `33 passed`
+- Current backend test baseline: `70 passed`
 - Portfolio validation baseline: `11 PASS, 0 FAIL`
 - Python used for the verified backend: `3.14.0`
 
@@ -24,14 +23,15 @@ Build a local, single-user Streamlit decision-support application for a USD-deno
 
 The frontend must let the user:
 
-1. Upload a complete portfolio Excel workbook and observe pipeline progress.
-2. View portfolio value, cash, holdings, profit/loss, allocation and TWR history.
-3. Add, edit and delete trades, cash movements and dividends.
-4. Inspect individual security history and performance.
-5. Run portfolio risk analysis.
-6. Run portfolio optimization with user-selected tickers and constraints.
-7. Generate a rebalancing plan.
-8. Inspect backend health and validation results.
+1. Choose an input type: upload a complete portfolio Excel workbook or upload multiple Midas monthly statement PDFs.
+2. For Midas imports, inspect warnings and proposed corporate actions, then explicitly approve or reject every candidate before portfolio data is replaced.
+3. View portfolio value, cash, holdings, profit/loss, allocation and TWR history.
+4. Add, edit and delete trades, cash movements and dividends.
+5. Inspect individual security history and performance.
+6. Run portfolio risk analysis.
+7. Run portfolio optimization with user-selected tickers and constraints.
+8. Generate a rebalancing plan.
+9. Inspect backend health and validation results.
 
 The application is a decision-support tool. It must not present results as guaranteed returns, investment advice or executable brokerage orders.
 
@@ -45,7 +45,8 @@ These rules override frontend convenience:
 
 2. **Do not write directly to SQLite from frontend code.**
    - Use `transaction_service.py` for mutations.
-   - Use `portfolio_pipeline.py` for a complete Excel import.
+   - Use `run_portfolio_pipeline()` for the common eight-stage import after a valid workbook exists.
+   - Use `prepare_midas_portfolio_import()` and `finalize_midas_portfolio_import()` for the two-phase Midas review workflow.
    - Use `dashboard_service.py` for dashboard reads.
 
 3. **Do not manually adjust historical trades for stock splits.**
@@ -76,6 +77,14 @@ These rules override frontend convenience:
 10. **Do not modify backend behavior merely to simplify UI code.**
     - If a backend change appears necessary, first prove it with a failing test and obtain explicit approval.
 
+11. **Do not call terminal input functions from Streamlit.**
+    - `midas_pipeline_cli.py` is for local terminal use and contains `input()` prompts.
+    - Streamlit must render its own SEC email field and corporate-action decision controls, then call the frontend-friendly Midas pipeline functions directly.
+
+12. **Never auto-approve a corporate action in the UI.**
+    - Every proposed synthetic trade requires an explicit user decision.
+    - `REVIEW_REQUIRED` is blocking and cannot be bypassed by a frontend toggle.
+
 ## 4. Operating model and limitations
 
 The current backend uses one SQLite file at the project root. It is suitable for a local single-user application.
@@ -102,7 +111,18 @@ Important backend files:
 - `backend/risk_calculator.py`: portfolio and security risk metrics.
 - `backend/portfolio_optimizer.py`: minimum variance, maximum Sharpe and efficient frontier.
 - `backend/rebalancing_calculator.py`: target-vs-current trade plan.
-- `backend/portfolio_pipeline.py`: complete eight-stage Excel pipeline.
+- `backend/portfolio_pipeline.py`: single terminal entry point for Excel/Midas selection and the common eight-stage workbook pipeline.
+- `backend/midas_pdf_parser.py`: parses one Midas PDF.
+- `backend/midas_import_service.py`: combines uploaded statements and removes duplicate PDFs/records.
+- `backend/midas_reconciliation_service.py`: compares transaction-derived shares with monthly holdings snapshots.
+- `backend/midas_corporate_action_resolver.py`: checks splits and verified ticker changes.
+- `backend/midas_cash_evidence_service.py`: finds Midas cash evidence for disappearing positions.
+- `backend/sec_corporate_action_service.py`: retrieves official SEC evidence.
+- `backend/midas_official_action_resolver.py`: combines official evidence with local cash and holdings evidence.
+- `backend/midas_action_confirmation_service.py`: applies explicit approve/reject decisions.
+- `backend/midas_portfolio_exporter.py`: creates a `portfolio.xlsx`-compatible workbook.
+- `backend/midas_portfolio_pipeline.py`: two-phase frontend-friendly Midas preview/finalization API.
+- `backend/midas_pipeline_cli.py`: terminal-only Midas interaction; do not use it for Streamlit widgets.
 - `backend/portfolio_refresh_service.py`: six-stage refresh after CRUD changes.
 - `backend/transaction_service.py`: safe CRUD API with snapshot rollback.
 - `backend/dashboard_service.py`: read API intended for the frontend.
@@ -113,6 +133,12 @@ Tests:
 - `tests/test_transaction_service.py`
 - `tests/test_backend_integration.py`
 - `tests/test_excel_importer.py`
+- `tests/test_midas_import.py`
+- `tests/test_midas_action_confirmation.py`
+- `tests/test_midas_official_action_safety.py`
+- `tests/test_midas_portfolio_exporter.py`
+- `tests/test_midas_portfolio_pipeline.py`
+- `tests/test_midas_pipeline_cli.py`
 - `tests/conftest.py`
 
 ## 6. Frontend project structure
@@ -207,9 +233,18 @@ Important ownership:
 - Raw trade input source: `trades.raw_shares` and `trades.raw_price_usd`
 - Split-adjusted fields are derived: `shares`, `price_usd`, `split_factor`
 
-## 9. Complete Excel upload workflow
+## 9. Complete portfolio import workflows
 
-The uploader accepts one `.xlsx` workbook containing exactly these sheets:
+The onboarding/import screen must begin with an explicit source selector:
+
+- `Excel workbook`
+- `Midas statements`
+
+Only the controls for the selected source should be visible. Both paths must end by calling the same `run_portfolio_pipeline()` function with a temporary compatible workbook.
+
+### 9.1 Excel upload workflow
+
+The uploader accepts one `.xlsx` workbook containing at least these three required sheets. Extra sheets may be present and are ignored by the importer:
 
 ### `trades`
 
@@ -284,6 +319,133 @@ The complete pipeline has eight stages:
 7. `security_daily` - Building daily security history
 8. `validation` - Validating portfolio results
 
+### 9.2 Midas PDF upload workflow
+
+The Midas uploader accepts multiple `.pdf` files in one submission. The user may upload statements in any filename order; backend code sorts and deduplicates them. Do not require the browser filename to follow a specific month format.
+
+Frontend inputs:
+
+- Multiple PDF uploader
+- SEC contact email
+- Explicit button to analyse statements
+- Corporate-action review table when candidates exist
+- One `Approve` or `Reject` decision for every candidate
+- Explicit confirmation before replacing existing portfolio data
+
+The SEC contact email identifies the application operator for SEC fair-access requests. It must not be stored in the workbook, SQLite database, logs or frontend state longer than needed for the import request.
+
+Convert each uploaded file to `MidasStatementInput` using the uploaded bytes and original display name:
+
+```python
+from midas_import_service import MidasStatementInput
+
+sources = [
+    MidasStatementInput(
+        source=uploaded_file.getvalue(),
+        source_name=uploaded_file.name,
+    )
+    for uploaded_file in uploaded_files
+]
+```
+
+#### Phase A - Analyse without mutating the portfolio
+
+```python
+from midas_portfolio_pipeline import (
+    prepare_midas_portfolio_import,
+)
+
+sec_user_agent = (
+    "US Equity Portfolio Decision Support "
+    + sec_contact_email.strip()
+)
+
+preview = prepare_midas_portfolio_import(
+    sources=sources,
+    sec_user_agent=sec_user_agent,
+    progress_callback=midas_progress_callback,
+)
+```
+
+Store `preview` in `st.session_state` while the user reviews the result. Display:
+
+- `preview.summary`
+- `preview.warnings`
+- `preview.action_review`
+- `preview.official_actions.unresolved_issues` when present
+- Duplicate statement and duplicate-record information from the preview/statements result
+
+Status behavior:
+
+- `REVIEW_REQUIRED`: block finalization and display unresolved issues. Do not offer an override button.
+- `AWAITING_USER_CONFIRMATION`: render a decision control for every row in `preview.action_review`.
+- `READY_FOR_FINALIZATION`: no candidate requires a decision; allow finalization with an empty decision mapping.
+
+The action review must show at minimum:
+
+- Action ID
+- Date
+- Ticker
+- Shares
+- Price per share
+- Expected proceeds
+- Matching Midas cash evidence
+- Confidence/status
+
+Never infer a decision from a checkbox default. Require an explicit value for every candidate.
+
+#### Phase B - Apply decisions and create the compatible workbook
+
+```python
+from midas_portfolio_pipeline import (
+    finalize_midas_portfolio_import,
+)
+
+result = finalize_midas_portfolio_import(
+    preview=preview,
+    decisions=decisions,
+    progress_callback=midas_progress_callback,
+)
+
+workbook_bytes = result.workbook.workbook_bytes
+```
+
+`decisions` is a mapping from each `action_id` to exactly `APPROVE` or `REJECT`. The backend rejects missing or unknown decisions.
+
+The generated workbook already contains the required `trades`, `cash_movements` and `dividends` sheets. It also applies verified ticker aliases and Yahoo-compatible class-share formatting. Do not alter or rebuild its rows in frontend code.
+
+Write `workbook_bytes` to a temporary `.xlsx` file, then run the common eight-stage portfolio pipeline:
+
+```python
+result = run_portfolio_pipeline(
+    excel_path=Path(temp_xlsx_path),
+    replace_existing=True,
+    progress_callback=streamlit_progress_callback,
+)
+```
+
+Delete the temporary workbook in a `finally` block. Clear the retained preview, decisions, uploaded bytes and relevant read caches after success or when the user starts a new import.
+
+### 9.3 Terminal workflow reference
+
+The terminal user runs only `backend/portfolio_pipeline.py`:
+
+```bash
+# Excel
+python backend/portfolio_pipeline.py \
+    --source excel \
+    portfolio.xlsx \
+    --replace-existing
+
+# Midas PDFs from Project Folder/midas_ekstreleri/
+python backend/portfolio_pipeline.py \
+    --source midas \
+    --overwrite-midas-output \
+    --replace-existing
+```
+
+This terminal behavior is a reference for business flow only. Streamlit must not launch the CLI as a subprocess or attempt to answer its `input()` prompts.
+
 ## 10. Progress callback contract
 
 `portfolio_pipeline.PipelineProgress` contains:
@@ -308,6 +470,17 @@ The callback must:
 Do not perform Streamlit UI updates from a background thread. The current backend is synchronous; call it synchronously inside the button action and update widgets through the callback.
 
 CRUD refreshes use the same event type but contain six stages: metadata, market data, holdings, portfolio daily, security daily and validation.
+
+`midas_portfolio_pipeline.MidasPipelineProgress` contains:
+
+- `step: int`
+- `total_steps: int`
+- `stage: str`
+- `status: str`
+- `message: str`
+- `progress: float`
+
+The Midas callback covers statement reading, reconciliation, corporate-action checks, cash evidence, SEC evidence, review preparation, confirmation and workbook creation. The UI should keep these messages visible until the common eight-stage portfolio pipeline begins, then continue with the standard progress adapter.
 
 ## 11. Transaction service contract
 
@@ -665,11 +838,13 @@ Display recommendation actions exactly as returned, including `BUY`, `SELL`, `HO
 
 When no valid database exists:
 
-- Show a concise explanation of the required Excel workbook.
-- Offer `.xlsx` upload.
-- Show the required sheet and column names.
+- Explain that the user may choose either a compatible Excel workbook or multiple Midas statement PDFs.
+- Offer mutually exclusive `Excel` and `Midas` source choices.
+- For Excel, show the required sheets and columns and offer one `.xlsx` uploader.
+- For Midas, offer a multi-PDF uploader, SEC contact-email field, analysis progress, warnings and explicit corporate-action review.
 - Require overwrite confirmation if source data already exists.
-- Run the eight-stage pipeline with live progress.
+- Never finalize a Midas import while any action decision is pending or any issue is `REVIEW_REQUIRED`.
+- Run Midas preview/finalization progress first when applicable, then run the common eight-stage pipeline with live progress.
 - Show final elapsed time and validation summary.
 - Route to Overview only after validation succeeds.
 
@@ -705,7 +880,9 @@ Use tabs:
 1. Trades
 2. Cash movements
 3. Dividends
-4. Excel replacement import
+4. Portfolio import
+
+The fourth tab must support both Excel replacement and Midas statement replacement. Do not put the Midas review inside a transaction edit form.
 
 For each source type:
 
@@ -789,6 +966,10 @@ Use `st.session_state` for:
 - Optimization parameters
 - Last successful analysis result
 - Confirmation state
+- Selected import source
+- Midas preview object
+- Midas corporate-action decisions keyed by action ID
+- Midas import stage/status while the user reviews candidates
 
 Caching rules:
 
@@ -846,6 +1027,8 @@ Rules:
 - Do not add secrets directly to source files.
 - If future configuration is required, use environment variables and an ignored `.env` file.
 - Uploaded Excel files must be temporary and deleted after processing.
+- Uploaded Midas PDFs and generated temporary workbooks must be deleted after processing and must never be written using user-supplied paths.
+- Do not persist the SEC contact email in SQLite, generated workbooks or application logs.
 - Do not let user-supplied file names determine arbitrary filesystem paths.
 
 ## 18. Testing requirements
@@ -857,7 +1040,7 @@ python -m pip install -r requirements.txt
 python -m pytest -v
 ```
 
-Expected backend baseline: `33 passed`.
+Expected backend baseline: `70 passed`.
 
 After each frontend milestone:
 
@@ -874,6 +1057,10 @@ Minimum new automated tests:
 - Page data adapters tolerate empty DataFrames.
 - Mutation handler clears caches only after success.
 - Date and parameter validation rejects invalid ranges.
+- Midas uploaded bytes retain safe display names without controlling filesystem paths.
+- `REVIEW_REQUIRED` blocks Midas finalization.
+- Every Midas action requires an explicit approve/reject decision.
+- A finalized Midas workbook is passed to the same common portfolio pipeline used by Excel uploads.
 
 Do not weaken or delete backend tests to make frontend tests pass.
 
@@ -884,21 +1071,23 @@ Frontend v1 is complete only when all conditions are true:
 1. A fresh clone can install dependencies using documented commands.
 2. If no database exists, the app shows onboarding instead of crashing.
 3. A valid workbook can run through all eight stages with visible progress.
-4. A failed workbook import shows the backend error and no false success.
-5. Overview uses dashboard-service results without duplicate financial math.
-6. Open and closed holdings display correctly.
-7. Trade, cash and dividend CRUD use transaction-service functions.
-8. Old trades and split-adjusted histories remain backend-managed.
-9. Failed CRUD refresh restores the database and the UI reports failure.
-10. Security analysis includes open and closed/delisted tickers when history exists.
-11. Risk page shows the risk-free-rate source, observation date and rate.
-12. Optimization accepts selected tickers and min/max constraints.
-13. Frontier points display stored weights as well as risk/return.
-14. Rebalancing supports all backend strategies and never sends orders.
-15. Health page displays all validation checks.
-16. All backend and frontend tests pass.
-17. Personal database and workbook remain ignored by Git.
-18. README contains frontend setup and run instructions.
+4. Multiple valid Midas statements can be analysed, reviewed, finalized into a compatible workbook and passed through all eight common stages.
+5. A Midas import cannot continue with unresolved evidence or pending decisions.
+6. A failed workbook or Midas import shows the backend error and no false success.
+7. Overview uses dashboard-service results without duplicate financial math.
+8. Open and closed holdings display correctly.
+9. Trade, cash and dividend CRUD use transaction-service functions.
+10. Old trades and split-adjusted histories remain backend-managed.
+11. Failed CRUD refresh restores the database and the UI reports failure.
+12. Security analysis includes open and closed/delisted tickers when history exists.
+13. Risk page shows the risk-free-rate source, observation date and rate.
+14. Optimization accepts selected tickers and min/max constraints.
+15. Frontier points display stored weights as well as risk/return.
+16. Rebalancing supports all backend strategies and never sends orders.
+17. Health page displays all validation checks.
+18. All backend and frontend tests pass.
+19. Personal databases, workbooks and statements remain ignored by Git.
+20. README contains frontend setup and run instructions.
 
 ## 20. Required implementation sequence
 
@@ -915,12 +1104,14 @@ Work in small reviewable milestones. Do not generate the entire frontend in one 
 
 ### Milestone 2 - Import and progress
 
-- Add Excel uploader.
-- Implement temporary-file handling.
-- Implement progress callback adapter.
+- Add the Excel/Midas source selector.
+- Add Excel upload and multi-PDF Midas upload.
+- Implement safe temporary-file handling for Excel, PDFs and generated workbook bytes.
+- Implement separate Midas and common-pipeline progress callback adapters.
 - Add replacement confirmation.
+- Add Midas SEC email, preview, warnings, action review and explicit decision controls.
 - Display validation outcome.
-- Test success and failure paths.
+- Test Excel success/failure and Midas preview/finalize/blocking paths.
 
 ### Milestone 3 - Overview
 
@@ -1017,10 +1208,12 @@ Hard constraints:
 - Do not write directly to SQLite.
 - Use dashboard_service for reads.
 - Use transaction_service for all CRUD writes.
-- Use portfolio_pipeline for complete Excel replacement imports.
+- Use run_portfolio_pipeline for the common workbook replacement import.
+- Use prepare_midas_portfolio_import and finalize_midas_portfolio_import for Midas uploads; never call the terminal CLI from Streamlit.
 - Keep refresh_calculated_data=True for every user mutation.
 - Do not bypass snapshot rollback, validation, split handling or delisted-ticker handling.
 - Do not hard-code TWTR or any ticker-specific fallback.
+- Never auto-approve Midas corporate actions or bypass REVIEW_REQUIRED.
 - Preserve numeric precision; round only at display time.
 - Never commit portfolio.xlsx, portfolio.db, statements, secrets, caches or virtual environments.
 - Do not implement public multi-user hosting, Monte Carlo, taxes, FX conversion or brokerage execution.
@@ -1052,7 +1245,7 @@ Do not implement Milestone 2 until the human explicitly approves it.
 
 Verified assumptions:
 
-- Backend v1 tests and validation passed at handoff.
+- The current backend baseline is 70 passing tests and 11 passing portfolio-validation checks.
 - The application is currently local and single-user.
 - USD is the only portfolio currency.
 - Streamlit is the selected frontend framework.

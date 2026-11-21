@@ -2,7 +2,7 @@
 
 Bu proje, ABD borsalarında işlem gören ve ABD dolarıyla fiyatlanan varlıklardan oluşan bir yatırım portföyünü analiz etmek için geliştirilen Python tabanlı bir karar destek sistemidir.
 
-Sistem; kullanıcının Excel dosyasındaki gerçek işlemleri okuyarak portföyü yeniden oluşturur, geçmiş fiyatları indirir, güncel pozisyonları ve nakit bakiyesini hesaplar, günlük portföy değerini çıkarır, TWR performansını ve risk ölçülerini hesaplar, portföy optimizasyonu yapar ve seçilen hedef portföye göre yeniden dengeleme önerileri üretir.
+Sistem, portföy kaynağı olarak kullanıcının hazırladığı uyumlu bir Excel dosyasını veya Midas aylık ekstre PDF'lerini kabul eder. Midas ekstreleri seçildiğinde PDF'ler okunur, tekrarlar temizlenir, aylık holdings kayıtlarıyla işlemler karşılaştırılır, split/ticker değişiklikleri ve nakit satın almaları araştırılır, gerekli kurumsal işlemler kullanıcı onayına sunulur ve `portfolio.xlsx` ile aynı yapıda bir Excel üretilir. Seçilen ya da üretilen Excel ortak pipeline'a aktarılır; geçmiş fiyatlar indirilir, güncel pozisyonlar ve nakit bakiyesi hesaplanır, günlük portföy değeri ve TWR oluşturulur, risk analizi ve optimizasyon yapılabilir ve seçilen hedef portföye göre yeniden dengeleme önerileri üretilebilir.
 
 > **Önemli:** Bu uygulama yatırım tavsiyesi vermez. Hesaplamalar yalnızca karar desteği ve eğitim amacı taşır. Optimizasyon ve yeniden dengeleme sonuçları otomatik alım-satım emri değildir.
 
@@ -14,17 +14,18 @@ Sistem; kullanıcının Excel dosyasındaki gerçek işlemleri okuyarak portföy
 4. [Proje klasör yapısı](#proje-klasör-yapısı)
 5. [Gerekli yazılımlar](#gerekli-yazılımlar)
 6. [Projeyi sıfırdan kurma](#projeyi-sıfırdan-kurma)
-7. [portfolio.xlsx nasıl hazırlanır?](#portfolioxlsx-nasıl-hazırlanır)
-8. [Veritabanı yapısı](#veritabanı-yapısı)
-9. [Pipeline nasıl çalıştırılır?](#pipeline-nasıl-çalıştırılır)
-10. [Yeni verilerle portföyü güncelleme](#yeni-verilerle-portföyü-güncelleme)
-11. [Dosyaların ve önemli fonksiyonların açıklaması](#dosyaların-ve-önemli-fonksiyonların-açıklaması)
-12. [Hesaplama mantığı](#hesaplama-mantığı)
-13. [Analiz dosyalarını ayrı ayrı çalıştırma](#analiz-dosyalarını-ayrı-ayrı-çalıştırma)
-14. [Git ve GitHub kullanımı](#git-ve-github-kullanımı)
-15. [Sık karşılaşılan hatalar](#sık-karşılaşılan-hatalar)
-16. [Planlanan Streamlit arayüzü](#planlanan-streamlit-arayüzü)
-17. [Sınırlamalar](#sınırlamalar)
+7. [Veri kaynağı seçimi](#veri-kaynağı-seçimi)
+8. [portfolio.xlsx nasıl hazırlanır?](#portfolioxlsx-nasıl-hazırlanır)
+9. [Veritabanı yapısı](#veritabanı-yapısı)
+10. [Pipeline nasıl çalıştırılır?](#pipeline-nasıl-çalıştırılır)
+11. [Yeni verilerle portföyü güncelleme](#yeni-verilerle-portföyü-güncelleme)
+12. [Dosyaların ve önemli fonksiyonların açıklaması](#dosyaların-ve-önemli-fonksiyonların-açıklaması)
+13. [Hesaplama mantığı](#hesaplama-mantığı)
+14. [Analiz dosyalarını ayrı ayrı çalıştırma](#analiz-dosyalarını-ayrı-ayrı-çalıştırma)
+15. [Git ve GitHub kullanımı](#git-ve-github-kullanımı)
+16. [Sık karşılaşılan hatalar](#sık-karşılaşılan-hatalar)
+17. [Planlanan Streamlit arayüzü](#planlanan-streamlit-arayüzü)
+18. [Sınırlamalar](#sınırlamalar)
 
 ---
 
@@ -74,6 +75,13 @@ Projenin backend kısmında şu özellikler çalışmaktadır:
 
 - SQLite veritabanı kurulumu ve şema kontrolü
 - Excel'den trade, nakit hareketi ve temettü aktarımı
+- Midas aylık ekstre PDF'lerini toplu okuma ve birleştirme
+- Tekrarlanan PDF ve kayıtları güvenli biçimde ayıklama
+- Ekstrelerdeki aylık holdings ile işlem geçmişini karşılaştırma
+- Split, ticker değişikliği ve nakit satın alma adaylarını araştırma
+- SEC belgeleri ve Midas nakit hareketleriyle kurumsal işlem doğrulama
+- Kurumsal işlemler için kullanıcı onayı ve denetlenebilir sentetik işlem üretimi
+- Midas PDF'lerinden `portfolio.xlsx` uyumlu workbook oluşturma
 - Otomatik işlem ID üretimi
 - İşlem doğrulama ve tarih/saat normalizasyonu
 - Otomatik hisse bölünmesi düzeltmesi
@@ -93,8 +101,9 @@ Projenin backend kısmında şu özellikler çalışmaktadır:
 - Hatalı veri değişikliklerinde database snapshot ve otomatik geri alma
 - Dashboard için hazır veri servisleri
 - 11 yapısal ve finansal kontrolden oluşan portföy doğrulama servisi
-- Tüm temel veri hazırlama adımlarını tek komutta çalıştıran sekiz aşamalı pipeline
-- Excel importu, işlem servisleri ve backend entegrasyonları için otomatik testler
+- Excel veya Midas kaynağını tek giriş dosyasından seçebilen pipeline
+- Tüm temel veri hazırlama adımlarını çalıştıran sekiz aşamalı ortak pipeline
+- Excel, Midas, işlem servisleri ve backend entegrasyonları için 70 otomatik test
 
 Streamlit kullanıcı arayüzü henüz oluşturulmamıştır. Mevcut kodlar uygulamanın hesaplama ve veri katmanını oluşturmaktadır.
 
@@ -104,33 +113,43 @@ Streamlit kullanıcı arayüzü henüz oluşturulmamıştır. Mevcut kodlar uygu
 
 ```mermaid
 flowchart TD
-    A[portfolio.xlsx] --> B[Excel Importer]
-    B --> C[(SQLite portfolio.db)]
-    D[yfinance] --> E[Asset Metadata]
-    D --> F[Historical Market Prices]
-    E --> C
-    F --> C
-    C --> G[Holdings Summary]
-    C --> H[Portfolio Daily and TWR]
-    C --> I[Security Daily and Security TWR]
-    G --> J[Performance and Risk Analysis]
-    H --> J
+    A{Veri kaynağı}
+    A -->|Excel| B[portfolio.xlsx veya uyumlu workbook]
+    A -->|Midas| C[midas_ekstreleri içindeki PDF'ler]
+    C --> D[PDF parsing ve tekrar temizleme]
+    D --> E[Holdings mutabakatı]
+    E --> F[Split ve ticker değişikliği kontrolü]
+    F --> G[Nakit kanıtı ve SEC doğrulaması]
+    G --> H{Kullanıcı kurumsal işlem onayı}
+    H --> I[midas_portfolio_generated.xlsx]
+    B --> J[Excel Importer]
     I --> J
-    F --> J
-    J --> K[Portfolio Optimizer]
-    K --> L[Rebalancing Plan]
-    G --> M[Portfolio Validation]
-    H --> M
-    I --> M
-    C --> N[Dashboard Service]
-    J --> N
-    K --> N
-    L --> N
-    M --> N
-    N --> O[Planned Streamlit Dashboard]
+    J --> K[(SQLite portfolio.db)]
+    L[yfinance] --> M[Asset Metadata]
+    L --> N[Historical Market Prices]
+    M --> K
+    N --> K
+    K --> O[Holdings Summary]
+    K --> P[Portfolio Daily ve Portfolio TWR]
+    K --> Q[Security Daily ve Security TWR]
+    O --> R[Portfolio Validation]
+    P --> R
+    Q --> R
+    O --> S[Performance ve Risk Analysis]
+    P --> S
+    Q --> S
+    N --> S
+    S --> T[Portfolio Optimizer]
+    T --> U[Rebalancing Plan]
+    K --> V[Dashboard Service]
+    S --> V
+    T --> V
+    U --> V
+    R --> V
+    V --> W[Planlanan Streamlit arayüzü]
 ```
 
-Kullanıcı yalnızca ham işlemlerini Excel'e girer. Hesaplanan alanlar Python tarafından oluşturulur ve SQLite veritabanına kaydedilir.
+Excel kullanan kullanıcı ham işlemlerini workbook'a girer. Midas kullanan kullanıcı PDF'lerini `midas_ekstreleri/` klasörüne koyar ve doğrulanmış kurumsal işlem adaylarını onaylar. Her iki yol da aynı Excel şemasında birleşir; hesaplanan alanlar Python tarafından oluşturulur ve SQLite veritabanına kaydedilir.
 
 ---
 
@@ -143,6 +162,17 @@ Project Folder/
 │   ├── database.py                # Ortak SQLite bağlantı ve doğrulama araçları
 │   ├── database_setup.py          # Veritabanı tablolarını ve indeksleri kurar
 │   ├── excel_importer.py          # Excel'i okur, doğrular ve ham verileri kaydeder
+│   ├── midas_pdf_parser.py        # Tek Midas PDF'inden işlemleri ve holdings'i çıkarır
+│   ├── midas_import_service.py    # Birden çok ekstreyi birleştirir ve tekrarları temizler
+│   ├── midas_reconciliation_service.py # İşlemlerle aylık holdings'i karşılaştırır
+│   ├── midas_corporate_action_resolver.py # Split ve ticker değişikliklerini araştırır
+│   ├── midas_cash_evidence_service.py # Nakit satın alma kanıtlarını eşleştirir
+│   ├── sec_corporate_action_service.py # SEC belgelerinden resmi kanıt toplar
+│   ├── midas_official_action_resolver.py # Resmi ve yerel kanıtları birleştirir
+│   ├── midas_action_confirmation_service.py # Kullanıcı kararlarını uygular
+│   ├── midas_portfolio_exporter.py # portfolio.xlsx uyumlu workbook üretir
+│   ├── midas_portfolio_pipeline.py # Frontend uyumlu Midas önizleme/finalize akışı
+│   ├── midas_pipeline_cli.py      # Terminalde Midas onay ve dönüştürme akışı
 │   ├── asset_metadata.py          # Ticker metadata bilgilerini indirir
 │   ├── market_data.py             # Tarihsel piyasa fiyatlarını indirir
 │   ├── portfolio_calculator.py    # Holdings özeti ve nakit bakiyesi
@@ -156,12 +186,14 @@ Project Folder/
 │   ├── portfolio_refresh_service.py # Veri değişikliğinden sonra güvenli yenileme
 │   ├── transaction_service.py     # Trade, nakit ve temettü CRUD işlemleri
 │   ├── dashboard_service.py       # Frontend'in kullanacağı hazır veri fonksiyonları
-│   └── portfolio_pipeline.py      # Sekiz veri hazırlama adımını sırayla çalıştırır
+│   └── portfolio_pipeline.py      # Excel/Midas seçimi ve sekiz aşamalı ortak giriş
 ├── tests/
 │   ├── conftest.py                # İzole test database'i ve ortak test araçları
 │   ├── test_transaction_service.py # İşlem servisi testleri
 │   ├── test_backend_integration.py # Backend entegrasyon testleri
-│   └── test_excel_importer.py     # Excel import ve doğrulama testleri
+│   ├── test_excel_importer.py     # Excel import ve doğrulama testleri
+│   └── test_midas_*.py            # Midas parsing, güvenlik ve pipeline testleri
+├── midas_ekstreleri/              # Yerel Midas PDF'leri; GitHub'a yüklenmez
 ├── pytest.ini                     # Pytest klasör ve Python path ayarları
 ├── .gitignore                     # Kişisel ve geçici dosyaları Git dışında tutar
 ├── portfolio.xlsx                 # Kullanıcının tam işlem geçmişi
@@ -195,9 +227,12 @@ Projenin mevcut geliştirme ortamı Python 3.14 kullanmaktadır. Farklı bir Pyt
 - `pandas`: tablo ve zaman serisi işlemleri
 - `numpy`: sayısal hesaplamalar
 - `openpyxl`: Excel okuma
+- `pdfplumber`: Midas PDF ekstrelerinden tablo ve metin çıkarma
+- `requests`: SEC belge servisleriyle HTTP iletişimi
 - `yfinance`: Yahoo Finance verileri
 - `scipy`: portföy optimizasyonu
 - `matplotlib`, `seaborn`, `plotly`: grafikler ve görselleştirme
+- `pytest`: otomatik backend testleri
 
 Streamlit arayüzü eklendiğinde `streamlit` de `requirements.txt` dosyasına eklenecektir.
 
@@ -248,17 +283,85 @@ Kurulumu kontrol etmek için:
 python -m pip show pandas
 ```
 
-### 4. Excel dosyasını hazırlayın
+### 4. Veri kaynağını hazırlayın
 
-Proje ana klasöründe `portfolio.xlsx` bulunmalıdır. Dosyanın yapısı sonraki bölümde ayrıntılı olarak açıklanmıştır.
+İki seçenekten yalnızca birini kullanın:
+
+- Excel: Proje ana klasörüne `portfolio.xlsx` koyun veya komutta başka bir `.xlsx` yolu verin.
+- Midas: PDF ekstrelerini proje ana klasöründeki `midas_ekstreleri/` klasörüne koyun.
 
 ### 5. Tam pipeline'ı çalıştırın
 
+Excel için:
+
 ```bash
-python backend/portfolio_pipeline.py portfolio.xlsx --replace-existing
+python backend/portfolio_pipeline.py \
+    --source excel \
+    portfolio.xlsx \
+    --replace-existing
 ```
 
-Bu komut veritabanını hazırlar, Excel'i içeri aktarır, piyasa verilerini indirir ve temel portföy tablolarını oluşturur.
+Midas PDF'leri için:
+
+```bash
+python backend/portfolio_pipeline.py \
+    --source midas \
+    --overwrite-midas-output \
+    --replace-existing
+```
+
+Midas akışı SEC erişimi için iletişim e-postasını terminalde sorar, kurumsal işlem adaylarını gösterir ve her aday için açık kullanıcı onayı ister. Ardından `midas_portfolio_generated.xlsx` oluşturulur ve ortak sekiz aşamalı pipeline çalışır.
+
+---
+
+## Veri kaynağı seçimi
+
+Normal kullanımda çalıştırılacak tek giriş dosyası `backend/portfolio_pipeline.py` dosyasıdır. `--source` parametresi veri kaynağını belirler.
+
+### Excel kaynağı
+
+```bash
+python backend/portfolio_pipeline.py \
+    --source excel \
+    portfolio.xlsx \
+    --replace-existing
+```
+
+`--source` verilmezse geriye uyumluluk için `excel` kabul edilir. Excel yolu verilmezse proje kökündeki `portfolio.xlsx` kullanılır.
+
+### Midas PDF kaynağı
+
+PDF'leri şu klasöre koyun:
+
+```text
+Project Folder/midas_ekstreleri/
+```
+
+Ardından çalıştırın:
+
+```bash
+python backend/portfolio_pipeline.py \
+    --source midas \
+    --overwrite-midas-output \
+    --replace-existing
+```
+
+Varsayılan Midas klasörü `midas_ekstreleri/`, üretilen workbook ise `midas_portfolio_generated.xlsx` dosyasıdır. Farklı yollar gerektiğinde `--midas-folder` ve `--midas-output` kullanılabilir.
+
+SEC adil erişim politikası nedeniyle uygulama operatörünün iletişim e-postası gerekir. `--sec-contact-email adres@example.com` verilebilir; verilmezse terminal başlangıçta sorar. Bu adres Excel'e veya portföy veritabanına yazılmaz.
+
+Midas akışı:
+
+1. Bütün PDF'leri okur ve aynı PDF'nin tekrar yüklenmesini algılar.
+2. İşlem, nakit ve temettü kayıtlarını birleştirir ve tekrarları kaldırır.
+3. Aylık holdings kayıtlarıyla hesaplanan adetleri karşılaştırır.
+4. Split, ticker değişikliği ve kaybolan pozisyonları araştırır.
+5. Nakit satın alma adaylarını Midas nakit hareketleri ve SEC belgeleriyle doğrular.
+6. Otomatik eklenebilecek sentetik işlemleri kullanıcıya gösterir.
+7. Kullanıcının `y/n` kararı sonrasında Excel'i oluşturur.
+8. Oluşturulan Excel'i ortak portföy pipeline'ına aktarır.
+
+Kanıt yetersiz veya çelişkiliyse sistem otomatik tahmin uygulamak yerine `REVIEW_REQUIRED` durumuyla durur.
 
 ---
 
@@ -499,10 +602,24 @@ Bu nedenle bir veri değişikliğinde hesaplanan tablolar elle düzenlenmemeli; 
 
 ## Pipeline nasıl çalıştırılır?
 
-Pipeline, daha önce ayrı ayrı çalıştırılan temel backend adımlarını doğru sırada tek komutla çalıştırır.
+`portfolio_pipeline.py`, Excel ve Midas kaynakları için ortak terminal girişidir. Kaynak seçimi tamamlandıktan sonra temel backend adımlarını doğru sırada çalıştırır.
+
+Excel:
 
 ```bash
-python backend/portfolio_pipeline.py portfolio.xlsx --replace-existing
+python backend/portfolio_pipeline.py \
+    --source excel \
+    portfolio.xlsx \
+    --replace-existing
+```
+
+Midas:
+
+```bash
+python backend/portfolio_pipeline.py \
+    --source midas \
+    --overwrite-midas-output \
+    --replace-existing
 ```
 
 ### Pipeline aşamaları
@@ -549,15 +666,23 @@ En uzun aşamalar genellikle yfinance ile internet üzerinden veri indirilen met
 
 ### `--replace-existing` ne yapar?
 
-Database içinde daha önce işlem varsa importer güvenlik amacıyla normalde durur. `--replace-existing`, mevcut portföy verilerini yeni Excel'deki tam geçmişle değiştirir.
+Database içinde daha önce işlem varsa importer güvenlik amacıyla normalde durur. `--replace-existing`, mevcut portföy verilerini seçilen kaynaktaki tam geçmişle değiştirir.
 
-Bu seçenek yalnızca Excel dosyanız portföyün **tam işlem geçmişini** içeriyorsa kullanılmalıdır.
+Bu seçenek yalnızca Excel veya Midas PDF seti portföyün **tam işlem geçmişini** içeriyorsa kullanılmalıdır.
+
+### Midas'a özel seçenekler
+
+- `--midas-folder`: PDF klasörünü değiştirir; varsayılan `midas_ekstreleri/`.
+- `--midas-output`: Üretilecek Excel yolunu değiştirir; varsayılan `midas_portfolio_generated.xlsx`.
+- `--sec-contact-email`: SEC erişimi için uygulama operatörünün iletişim adresini verir.
+- `--overwrite-midas-output`: Daha önce oluşturulmuş Midas Excel'inin üzerine yazılmasına açıkça izin verir.
+- `--approve-all` / `--reject-all`: Terminalde bütün kurumsal işlem adaylarına toplu karar verir. Normal kullanıcı akışında adayların tek tek incelenmesi daha güvenlidir.
 
 ---
 
 ## Yeni verilerle portföyü güncelleme
 
-Örneğin yeni ayın işlemlerini eklemek için:
+Excel kullanan bir portföye yeni ayın işlemlerini eklemek için:
 
 1. Mevcut `portfolio.xlsx` dosyasının yedeğini alın.
 2. Yeni trade işlemlerini `trades` sheet'inin altına ekleyin.
@@ -569,10 +694,15 @@ Bu seçenek yalnızca Excel dosyanız portföyün **tam işlem geçmişini** iç
 8. Pipeline'ı çalıştırın:
 
 ```bash
-python backend/portfolio_pipeline.py portfolio.xlsx --replace-existing
+python backend/portfolio_pipeline.py \
+    --source excel \
+    portfolio.xlsx \
+    --replace-existing
 ```
 
 9. İşlemin sonunda `Portfolio pipeline completed successfully.` mesajını kontrol edin.
+
+Midas kullanan bir portföyde yeni aylık ekstreleri `midas_ekstreleri/` klasörüne ekleyin ve bütün ekstre setiyle Midas komutunu yeniden çalıştırın. Tekrarlanan PDF ve kayıtlar güvenli biçimde ayıklanır.
 
 Pipeline başarıyla tamamlandığında yeni `portfolio.db` güncel portföyü temsil eder.
 
@@ -806,8 +936,23 @@ Temel portföy hazırlığını tek noktadan yönetir.
 - `console_progress_callback()`: Terminalde loading mesajlarını gösterir.
 - `run_stage()`: Bir aşamayı çalıştırır ve hata/başarı durumunu bildirir.
 - `run_portfolio_pipeline()`: Sekiz temel aşamayı doğru sırada çalıştırır.
+- `run_selected_portfolio_source()`: Excel veya Midas kaynağını seçer; Midas seçildiyse workbook'u üretir ve her iki yolu ortak pipeline'da birleştirir.
 
 Aynı progress callback yapısı ileride Streamlit progress bar ile kullanılacaktır.
+
+### Midas ekstre modülleri
+
+- `midas_pdf_parser.py`: Tek PDF'ten trade, cash movement, dividend ve holdings kayıtlarını çıkarır.
+- `midas_import_service.py`: Birden fazla PDF'i birleştirir, hash ile aynı dosyayı ve kayıt anahtarlarıyla tekrar satırları ayıklar.
+- `midas_reconciliation_service.py`: Aylık holdings ile işlem geçmişinden hesaplanan adetleri karşılaştırır.
+- `midas_corporate_action_resolver.py`: Split ve ticker değişikliği adaylarını araştırır.
+- `midas_cash_evidence_service.py`: Kaybolan pozisyonla yakın tarihteki nakit hareketlerini eşleştirir.
+- `sec_corporate_action_service.py`: SEC belgelerinden resmi fiyat ve olay tarihi kanıtı toplar.
+- `midas_official_action_resolver.py`: Midas ve SEC kanıtlarını güvenlik toleranslarıyla birleştirir; uyuşmayan kanıtta otomatik işlem oluşturmaz.
+- `midas_action_confirmation_service.py`: Kullanıcının onay/red kararlarını uygular.
+- `midas_portfolio_exporter.py`: `trades`, `cash_movements` ve `dividends` sheet'lerini içeren uyumlu workbook üretir; doğrulanmış ticker değişikliklerini uygular.
+- `midas_portfolio_pipeline.py`: Frontend'in kullanacağı önizleme ve finalize aşamalarını progress callback ile sunar.
+- `midas_pipeline_cli.py`: Terminal e-postası, aday gösterimi ve `y/n` onayı gibi terminale özel davranışları yönetir.
 
 ### backend/portfolio_validation_service.py
 
@@ -883,6 +1028,12 @@ Testler gerçek `portfolio.db` dosyasını değiştirmeden geçici ve izole data
 - `test_transaction_service.py`: Normal/eski tarihli/splitli/gift işlemleri, satış kontrolü, rollback ve CRUD senaryoları
 - `test_backend_integration.py`: Pipeline, günlük tablolar, risk, optimizasyon, rebalancing ve doğrulama entegrasyonu
 - `test_excel_importer.py`: Excel şeması, ham değerlerin korunması, split, tekrar import ve geçersiz işlem kontrolleri
+- `test_midas_import.py`: Çoklu PDF birleştirme, tekrar temizleme ve dönem kontrolleri
+- `test_midas_action_confirmation.py`: Kurumsal işlem kararları ve sentetik trade kontrolleri
+- `test_midas_official_action_safety.py`: SEC fiyatı ile Midas nakit kanıtının güvenlik kontrolleri
+- `test_midas_portfolio_exporter.py`: Üretilen Excel'in şeması, ticker normalizasyonu ve importer uyumluluğu
+- `test_midas_portfolio_pipeline.py`: Midas önizleme/finalize akışı ve progress olayları
+- `test_midas_pipeline_cli.py`: SEC kimliği ve Excel/Midas kaynak seçimi
 
 Tüm testleri çalıştırmak için:
 
@@ -890,7 +1041,7 @@ Tüm testleri çalıştırmak için:
 python -m pytest -v
 ```
 
-Mevcut backend sürümünde beklenen sonuç `33 passed` mesajıdır.
+Mevcut backend sürümünde beklenen sonuç `70 passed` mesajıdır.
 
 ### control.py
 
@@ -1112,6 +1263,7 @@ Testler gerçek portföy veritabanından izole çalışır. Yeni bir backend de�
 Bu proje gerçek finansal veriler içerebilir. Aşağıdaki dosyalar public GitHub repository'ye yüklenmemelidir:
 
 - `portfolio.xlsx`
+- `midas_portfolio_generated.xlsx`
 - `portfolio.db`
 - `.venv/`
 - `__pycache__/`
@@ -1130,6 +1282,8 @@ venv/
 
 # Personal portfolio data
 portfolio.xlsx
+*.xlsx
+!portfolio_template.xlsx
 portfolio.db
 *.db-wal
 *.db-shm
@@ -1165,7 +1319,7 @@ git add .
 git status
 ```
 
-`git status` çıktısında `portfolio.xlsx`, `portfolio.db` veya `.venv` görünüyorsa commit yapmadan önce `.gitignore` dosyasını kontrol edin.
+`git status` çıktısında `portfolio.xlsx`, `midas_portfolio_generated.xlsx`, `portfolio.db`, `midas_ekstreleri/` veya `.venv` görünüyorsa commit yapmadan önce `.gitignore` dosyasını kontrol edin.
 
 İlk commit:
 
@@ -1237,7 +1391,7 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Gerçek `portfolio.xlsx` GitHub'da olmayacağı için yeni bilgisayara güvenli ve özel bir yöntemle ayrıca taşınmalıdır. Daha sonra pipeline çalıştırılır.
+Gerçek `portfolio.xlsx` ve Midas PDF ekstreleri GitHub'da olmayacağı için kullanılacak veri kaynağı yeni bilgisayara güvenli ve özel bir yöntemle ayrıca taşınmalıdır. Excel dosyası proje köküne; Midas PDF'leri ise `midas_ekstreleri/` klasörüne konduktan sonra uygun `--source` seçeneğiyle pipeline çalıştırılır.
 
 ### Takım çalışması için önerilen akış
 
@@ -1297,7 +1451,10 @@ python -m pip show pandas
 Database içinde daha önce veri vardır. Excel tam geçmişi içeriyorsa:
 
 ```bash
-python backend/portfolio_pipeline.py portfolio.xlsx --replace-existing
+python backend/portfolio_pipeline.py \
+    --source excel \
+    portfolio.xlsx \
+    --replace-existing
 ```
 
 ### `Excel file is missing required sheets`
@@ -1329,6 +1486,18 @@ Olası nedenler:
 - İşlem tarihi veya ticker yanlış olabilir.
 
 Ham broker verisini kontrol edin. Split düzeltmesini Excel'de manuel yapmayın.
+
+### `No PDF files found in: midas_ekstreleri`
+
+Midas PDF'lerini proje kökündeki `midas_ekstreleri/` klasörüne koyun. Dosya uzantılarının `.pdf` olduğundan ve komutu proje kökünden çalıştırdığınızdan emin olun.
+
+### `SEC access is not configured`
+
+Midas kurumsal işlem kontrolü SEC erişim kimliği ister. Komuta `--sec-contact-email adres@example.com` ekleyin veya terminalin başlangıçta sorduğu e-postayı girin. E-posta portföy verilerine kaydedilmez.
+
+### `REVIEW_REQUIRED`
+
+Bir pozisyon farkı split, ticker değişikliği veya doğrulanmış nakit satın almasıyla güvenli biçimde açıklanamamıştır. Sistem yanlış işlem üretmemek için durur. Uyarı tablosundaki ticker, tarih, adet farkı ve kanıt mesajlarını inceleyin; doğrulama olmadan otomatik onay vermeyin.
 
 ### Market price indirilemiyor
 
@@ -1371,7 +1540,9 @@ Conflict oluşursa dosyalar tek tek incelenmeli ve iki tarafın değişiklikleri
 
 Streamlit arayüzünde kullanıcı:
 
-- Excel yükleyebilecek,
+- Veri kaynağı olarak Excel veya Midas PDF'lerini seçebilecek,
+- Bir Excel workbook yükleyebilecek veya birden fazla Midas ekstresini birlikte yükleyebilecek,
+- Midas kurumsal işlem adaylarını kanıtlarıyla inceleyip onaylayabilecek/reddedebilecek,
 - Pipeline ilerlemesini adım adım görebilecek,
 - Portföy özetini inceleyebilecek,
 - Holdings ve nakit durumunu görebilecek,
@@ -1382,7 +1553,9 @@ Streamlit arayüzünde kullanıcı:
 - Efficient frontier üzerinde hedef seçebilecek,
 - Rebalancing önerisini görüntüleyebilecek.
 
-Excel yükleme sırasında kullanıcı sistemin donduğunu düşünmemesi için pipeline'ın `PipelineProgress` callback yapısı kullanılacaktır. Ekranda örneğin şu mesajlar gösterilecektir:
+Midas yükleme sırasında dokuz aşamalı `MidasPipelineProgress`, ortak portföy hesaplamalarında ise sekiz aşamalı `PipelineProgress` callback yapısı kullanılacaktır. Kullanıcı PDF okuma, mutabakat, kurumsal işlem kontrolü, SEC kanıtı, onay, workbook oluşturma ve portföy hesaplamalarının hangi aşamada olduğunu görecektir.
+
+Ortak portföy pipeline'ında örneğin şu mesajlar gösterilecektir:
 
 ```text
 1/8 Preparing database
@@ -1423,7 +1596,10 @@ cd "Project Folder"
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-python backend/portfolio_pipeline.py portfolio.xlsx --replace-existing
+python backend/portfolio_pipeline.py \
+    --source excel \
+    portfolio.xlsx \
+    --replace-existing
 python backend/portfolio_validation_service.py
 python -m pytest -v
 python backend/risk_calculator.py
@@ -1431,4 +1607,13 @@ python backend/portfolio_optimizer.py
 ```
 
 Pipeline başarıyla tamamlanmadan risk, optimizasyon veya rebalancing aşamasına geçilmemelidir. Backend kodunda değişiklik yapıldıktan sonra otomatik testler yeniden çalıştırılmalıdır.
+
+Midas kullanacak kişi, `portfolio.xlsx` hazırlamak yerine PDF'lerini `midas_ekstreleri/` klasörüne koyup şu komutu çalıştırabilir:
+
+```bash
+python backend/portfolio_pipeline.py \
+    --source midas \
+    --overwrite-midas-output \
+    --replace-existing
+```
 
